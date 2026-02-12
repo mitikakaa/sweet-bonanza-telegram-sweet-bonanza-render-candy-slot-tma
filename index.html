@@ -3,23 +3,81 @@
 <head>
 <meta charset="UTF-8">
 <title>Sweet Bonanza Mini App</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-  /* Фон и оформление */
-  body { margin:0; background: linear-gradient(180deg,#ffb6e6,#8b5cf6); display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; }
-  .game-container { text-align:center; }
-  .grid-container { display:grid; grid-template-columns: repeat(6, 60px); grid-gap:5px; padding:1rem; background: rgba(255,255,255,0.15); border-radius:1rem; box-shadow:0 0 20px rgba(0,0,0,0.3); }
-  .cell { width:60px; height:60px; display:flex; justify-content:center; align-items:center; font-size:28px; border-radius:10px; background: rgba(255,255,255,0.2); transition: transform 0.3s, opacity 0.3s; }
-  .cell.win { transform: scale(1.5); opacity:1; }
-  .buttons { margin-top:15px; }
-  .buttons button { margin:5px; padding:10px 20px; border:none; border-radius:10px; font-weight:bold; color:white; cursor:pointer; box-shadow:0 0 10px rgba(0,0,0,0.3); }
-  .spin { background:#ff3b9c; }
-  .bonus { background:#ffce00; color:#333; }
-  .info { color:white; margin-top:10px; font-weight:bold; }
+body {
+  margin:0;
+  background: linear-gradient(180deg,#ffb6e6,#8b5cf6);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+  font-family: 'Segoe UI', sans-serif;
+  overflow: hidden;
+}
+.game-container {
+  text-align:center;
+  background: rgba(255,255,255,0.05);
+  padding: 1rem 1.5rem;
+  border-radius: 1rem;
+  box-shadow:0 0 30px rgba(0,0,0,0.3);
+}
+.grid-container {
+  display: grid;
+  grid-template-columns: repeat(6, 60px);
+  grid-template-rows: repeat(5, 60px);
+  gap:5px;
+  margin: 1rem auto;
+  background: rgba(255,255,255,0.15);
+  border-radius:1rem;
+  padding:5px;
+  position: relative;
+  overflow: hidden;
+}
+.cell {
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  background: rgba(255,255,255,0.2);
+  border-radius:10px;
+  transition: transform 0.5s, opacity 0.5s;
+  position: relative;
+}
+.cell.win {
+  animation: pop 0.5s ease forwards;
+}
+@keyframes pop {
+  0% { transform: scale(1); opacity:1; }
+  50% { transform: scale(1.5); opacity:1; }
+  100% { transform: scale(1); opacity:1; }
+}
+.cell img {
+  width:50px;
+  height:50px;
+}
+.buttons { margin-top:10px; }
+.buttons button {
+  margin:5px;
+  padding:10px 20px;
+  border:none;
+  border-radius:10px;
+  font-weight:bold;
+  color:white;
+  cursor:pointer;
+  box-shadow:0 0 10px rgba(0,0,0,0.3);
+}
+.spin { background:#ff3b9c; }
+.bonus { background:#ffce00; color:#333; }
+.info {
+  color:white;
+  font-weight:bold;
+  margin-top:8px;
+}
 </style>
 </head>
 <body>
 <div class="game-container">
-  <div id="grid" class="grid-container"></div>
+  <div class="grid-container" id="grid"></div>
   <div class="buttons">
     <button class="spin" onclick="spinGame()">SPIN</button>
     <button class="bonus" onclick="buyBonus()">BUY BONUS 100x</button>
@@ -28,100 +86,165 @@
 </div>
 
 <script>
+// =======================
+// Параметры игры
+// =======================
 const ROWS = 5;
 const COLS = 6;
-const SYMBOLS = ["🍎","🍇","🍉","🍑","🍒","🍬","🍌","🍋","🍍"];
-const BONUS_SYMBOL = "🍭";
 
-let grid = [];
+// PNG символы
+const SYMBOLS = {
+  "🍎":"https://i.ibb.co/7Cz9yT9/apple.png",
+  "🍇":"https://i.ibb.co/pRZV7Xb/grape.png",
+  "🍉":"https://i.ibb.co/k6yL7K3/watermelon.png",
+  "🍑":"https://i.ibb.co/NL4WxJP/peach.png",
+  "🍒":"https://i.ibb.co/fktsfZ9/cherry.png",
+  "🍬":"https://i.ibb.co/9rS0wzB/candy.png",
+  "🍭":"https://i.ibb.co/mvP3YZX/lollipop.png",
+  "🍌":"https://i.ibb.co/2h7Jr4p/banana.png",
+  "🍋":"https://i.ibb.co/K9m9mh2/lemon.png",
+  "🍍":"https://i.ibb.co/SfJtXcF/pineapple.png"
+};
+
+const FRUITS_ONLY = ["🍎","🍇","🍉","🍑","🍒","🍬"];
+
+const PAYTABLE = {
+  "🍬":[4,10,20],
+  "🍎":[1.5,2,10],
+  "🍇":[0.8,1.2,8],
+  "🍉":[0.5,1,5],
+  "🍑":[0.4,0.9,4],
+  "🍒":[0.25,0.75,2],
+  "🍌":[1,1,1],
+  "🍋":[1,1,1],
+  "🍍":[1,1,1]
+};
+
 let balance = 1000;
 let bet = 10;
 let freeSpins = 0;
+let grid = [];
 
-// Helper: случайный символ
-function getRandomSymbol(isBonus=false) {
-  if(isBonus && Math.random()<0.1) return BONUS_SYMBOL;
-  return SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)];
+// =======================
+// Функции
+// =======================
+function randSymbol() {
+  const keys = Object.keys(SYMBOLS);
+  return keys[Math.floor(Math.random()*keys.length)];
 }
 
-// Создать сетку
-function createGrid() {
+function createGrid(){
   const gridDiv = document.getElementById('grid');
-  gridDiv.innerHTML = '';
-  for(let r=0;r<ROWS;r++){
-    for(let c=0;c<COLS;c++){
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-      cell.textContent = grid[r][c];
-      gridDiv.appendChild(cell);
-    }
+  gridDiv.innerHTML='';
+  for(let i=0;i<ROWS*COLS;i++){
+    const cell = document.createElement('div');
+    cell.className='cell';
+    const img = document.createElement('img');
+    img.src=SYMBOLS[grid[i]];
+    cell.appendChild(img);
+    gridDiv.appendChild(cell);
   }
-  document.getElementById('info').textContent = `Balance: ${balance} | Free Spins: ${freeSpins}`;
+  updateInfo();
 }
 
-// Анимация выигрыша
-function animateWin(cells) {
-  cells.forEach(cell=>{
-    cell.classList.add('win');
-    setTimeout(()=>cell.classList.remove('win'),500);
+function updateInfo(){
+  document.getElementById('info').textContent=`Balance: ${balance} | Bet: ${bet} | Free Spins: ${freeSpins}`;
+}
+
+function animateWin(indices){
+  indices.forEach(i=>{
+    const cellDiv = document.getElementById('grid').children[i];
+    cellDiv.classList.add('win');
+    setTimeout(()=>cellDiv.classList.remove('win'),500);
   });
 }
 
-// Spin
+// =======================
+// SPIN
+// =======================
 function spinGame(){
-  // Генерируем сетку
+  if(balance<bet && freeSpins===0){ alert("Недостаточно денег!"); return; }
+  if(freeSpins>0){ freeSpins--; } else { balance-=bet; }
+
   grid = [];
-  let winCells = [];
-  for(let r=0;r<ROWS;r++){
-    const row = [];
-    for(let c=0;c<COLS;c++){
-      let sym = getRandomSymbol(freeSpins>0); // в бонусе шанс бонусных символов
-      row.push(sym);
-      if(sym===BONUS_SYMBOL) winCells.push({r,c});
-    }
-    grid.push(row);
+  for(let i=0;i<ROWS*COLS;i++){
+    grid.push(randSymbol());
   }
-
-  // Случайный выигрыш
-  let win = Math.floor(Math.random()*bet*5);
-  balance = balance - bet + win;
-
-  // Используем Free Spins
-  if(freeSpins>0) freeSpins--;
-
   createGrid();
 
-  // Анимация бонусных символов
-  winCells.forEach(pos=>{
-    const cellIndex = pos.r*COLS + pos.c;
-    const cellDiv = document.getElementById('grid').children[cellIndex];
-    animateWin([cellDiv]);
+  setTimeout(()=>tumble(),500);
+}
+
+// =======================
+// TUMBLE
+// =======================
+function tumble(){
+  let winCells = [];
+  let totalWin = 0;
+  let mults = [];
+
+  FRUITS_ONLY.forEach(f=>{
+    let cnt = grid.filter(x=>x===f).length;
+    if(cnt>=8){
+      let idx=0; if(cnt>=10) idx=1; if(cnt>=12) idx=2;
+      totalWin += bet*PAYTABLE[f][idx];
+      grid.forEach((x,i)=>{ if(x===f) winCells.push(i); });
+    }
   });
 
-  // Если 4+ бонуса — триггер Free Spins
-  if(winCells.length>=4){
-    freeSpins += 10;
-    alert("🎉 Bonus Triggered! 10 Free Spins!");
+  // Мультипликаторы бомбы 30% шанс
+  if(Math.random()<0.3){
+    const multValues=[2,5,10,25,50,100];
+    const multWeights=[400,250,120,40,8,2];
+    const totalWeight = multWeights.reduce((a,b)=>a+b,0);
+    let rand=Math.random()*totalWeight;
+    let val=2;
+    for(let i=0;i<multValues.length;i++){
+      if(rand<multWeights[i]){val=multValues[i]; break;}
+      rand-=multWeights[i];
+    }
+    totalWin*=val;
+    mults.push(val);
   }
-}
 
-// Buy Bonus
-function buyBonus(){
-  const cost = bet*100;
-  if(balance<cost){ alert('Недостаточно баланса'); return; }
-  balance -= cost;
-  freeSpins += 10;
+  animateWin(winCells);
+  balance += totalWin;
+
+  let scatters = grid.filter(x=>"🍭"===x).length;
+  if(freeSpins===0 && scatters>=4){
+    freeSpins+=10;
+    alert("🎉 BONUS TRIGGERED! 10 Free Spins!");
+  }
+
+  // Smooth Tumble: заменяем выигравшие клетки новыми
+  winCells.forEach(i=>{
+    grid[i]=randSymbol();
+  });
+
   createGrid();
-  alert("🎁 Bought 10 Free Spins!");
+
+  if(winCells.length>0){
+    setTimeout(tumble,500);
+  }
 }
 
-// Инициализация сетки
-for(let r=0;r<ROWS;r++){
-  const row = [];
-  for(let c=0;c<COLS;c++){
-    row.push(getRandomSymbol());
-  }
-  grid.push(row);
+// =======================
+// BUY BONUS
+// =======================
+function buyBonus(){
+  let cost = bet*100;
+  if(balance<cost){ alert("Недостаточно денег!"); return; }
+  balance -= cost;
+  freeSpins+=10;
+  updateInfo();
+  alert("🎁 Куплено 10 Free Spins!");
+}
+
+// =======================
+// INIT
+// =======================
+for(let i=0;i<ROWS*COLS;i++){
+  grid.push(randSymbol());
 }
 createGrid();
 </script>
