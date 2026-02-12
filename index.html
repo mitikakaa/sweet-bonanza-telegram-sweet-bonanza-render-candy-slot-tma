@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Sweet Bonanza Mini App</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/framer-motion/dist/framer-motion.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { margin:0; background: linear-gradient(180deg,#ff66cc,#8b5cf6); display:flex; justify-content:center; align-items:center; height:100vh; }
+  .gridbg { background: rgba(123,92,255,0.35); backdrop-filter: blur(10px); padding:1rem; border-radius:1rem; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+const { useState } = React;
+const { motion } = window["framer-motion"];
+
+const ROWS = 5;
+const COLS = 6;
+const SYMBOLS = ["🍎","🍇","🍉","🍑","🍒","🍬","🍌","🍋","🍍"];
+
+function getRandomSymbol() {
+  return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+}
+
+function App() {
+  const [grid, setGrid] = useState(Array.from({length:ROWS}, ()=>Array.from({length:COLS}, getRandomSymbol)));
+  const [balance, setBalance] = useState(1000);
+  const [bet, setBet] = useState(10);
+  const [freeSpins, setFreeSpins] = useState(0);
+  const [spinning, setSpinning] = useState(false);
+
+  const tg = window.Telegram?.WebApp;
+  tg?.ready?.();
+  tg?.expand?.();
+  tg?.setHeaderColor?.("#ff66cc");
+
+  function spinGame() {
+    if(spinning) return;
+    setSpinning(true);
+
+    // простой "спин" — новые случайные символы
+    const newGrid = Array.from({length:ROWS}, ()=>Array.from({length:COLS}, getRandomSymbol));
+    setGrid(newGrid);
+
+    // простой расчет выигрыша
+    let win = Math.floor(Math.random()*bet*5); 
+    setBalance(b=>b - bet + win);
+
+    // уменьшение Free Spins
+    if(freeSpins>0) setFreeSpins(f=>f-1);
+
+    setSpinning(false);
+  }
+
+  function buyBonus() {
+    const cost = bet*100;
+    if(balance < cost) return alert("Недостаточно баланса");
+    setBalance(b=>b-cost);
+    setFreeSpins(10);
+  }
+
+  return React.createElement("div",{className:"text-center gridbg"},
+    React.createElement("div",{className:"grid grid-cols-6 gap-2 mb-4"},
+      grid.flatMap((row,r)=>row.map((s,c)=>React.createElement(motion.div,{
+        key:r+"-"+c+"-"+s,
+        initial:{y:-50,opacity:0},
+        animate:{y:0,opacity:1},
+        transition:{duration:0.3},
+        className:"w-16 h-16 flex items-center justify-center text-3xl bg-white/20 rounded-xl"
+      },s)))
+    ),
+    React.createElement("div",{className:"mb-4 space-x-2"},
+      React.createElement("button",{onClick:spinGame,className:"px-6 py-2 bg-pink-500 text-white rounded-xl"}, "SPIN"),
+      React.createElement("button",{onClick:buyBonus,className:"px-6 py-2 bg-purple-500 text-white rounded-xl"}, "BUY BONUS 100x")
+    ),
+    React.createElement("div",{className:"text-white"},
+      "Balance: "+balance, React.createElement("br"),
+      "Free Spins: "+freeSpins
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
