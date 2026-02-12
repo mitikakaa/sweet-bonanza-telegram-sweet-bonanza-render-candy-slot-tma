@@ -3,90 +3,127 @@
 <head>
 <meta charset="UTF-8">
 <title>Sweet Bonanza Mini App</title>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/framer-motion/dist/framer-motion.js"></script>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
 <style>
-  body { margin:0; background: linear-gradient(180deg,#ff66cc,#8b5cf6); display:flex; justify-content:center; align-items:center; height:100vh; }
-  .gridbg { background: rgba(123,92,255,0.35); backdrop-filter: blur(10px); padding:1rem; border-radius:1rem; }
+  /* Фон и оформление */
+  body { margin:0; background: linear-gradient(180deg,#ffb6e6,#8b5cf6); display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; }
+  .game-container { text-align:center; }
+  .grid-container { display:grid; grid-template-columns: repeat(6, 60px); grid-gap:5px; padding:1rem; background: rgba(255,255,255,0.15); border-radius:1rem; box-shadow:0 0 20px rgba(0,0,0,0.3); }
+  .cell { width:60px; height:60px; display:flex; justify-content:center; align-items:center; font-size:28px; border-radius:10px; background: rgba(255,255,255,0.2); transition: transform 0.3s, opacity 0.3s; }
+  .cell.win { transform: scale(1.5); opacity:1; }
+  .buttons { margin-top:15px; }
+  .buttons button { margin:5px; padding:10px 20px; border:none; border-radius:10px; font-weight:bold; color:white; cursor:pointer; box-shadow:0 0 10px rgba(0,0,0,0.3); }
+  .spin { background:#ff3b9c; }
+  .bonus { background:#ffce00; color:#333; }
+  .info { color:white; margin-top:10px; font-weight:bold; }
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div class="game-container">
+  <div id="grid" class="grid-container"></div>
+  <div class="buttons">
+    <button class="spin" onclick="spinGame()">SPIN</button>
+    <button class="bonus" onclick="buyBonus()">BUY BONUS 100x</button>
+  </div>
+  <div class="info" id="info"></div>
+</div>
 
 <script>
-const { useState } = React;
-const { motion } = window["framer-motion"];
-
 const ROWS = 5;
 const COLS = 6;
 const SYMBOLS = ["🍎","🍇","🍉","🍑","🍒","🍬","🍌","🍋","🍍"];
+const BONUS_SYMBOL = "🍭";
 
-function getRandomSymbol() {
-  return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
+let grid = [];
+let balance = 1000;
+let bet = 10;
+let freeSpins = 0;
+
+// Helper: случайный символ
+function getRandomSymbol(isBonus=false) {
+  if(isBonus && Math.random()<0.1) return BONUS_SYMBOL;
+  return SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)];
 }
 
-function App() {
-  const [grid, setGrid] = useState(Array.from({length:ROWS}, ()=>Array.from({length:COLS}, getRandomSymbol)));
-  const [balance, setBalance] = useState(1000);
-  const [bet, setBet] = useState(10);
-  const [freeSpins, setFreeSpins] = useState(0);
-  const [spinning, setSpinning] = useState(false);
-
-  const tg = window.Telegram?.WebApp;
-  tg?.ready?.();
-  tg?.expand?.();
-  tg?.setHeaderColor?.("#ff66cc");
-
-  function spinGame() {
-    if(spinning) return;
-    setSpinning(true);
-
-    // простой "спин" — новые случайные символы
-    const newGrid = Array.from({length:ROWS}, ()=>Array.from({length:COLS}, getRandomSymbol));
-    setGrid(newGrid);
-
-    // простой расчет выигрыша
-    let win = Math.floor(Math.random()*bet*5); 
-    setBalance(b=>b - bet + win);
-
-    // уменьшение Free Spins
-    if(freeSpins>0) setFreeSpins(f=>f-1);
-
-    setSpinning(false);
+// Создать сетку
+function createGrid() {
+  const gridDiv = document.getElementById('grid');
+  gridDiv.innerHTML = '';
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.textContent = grid[r][c];
+      gridDiv.appendChild(cell);
+    }
   }
-
-  function buyBonus() {
-    const cost = bet*100;
-    if(balance < cost) return alert("Недостаточно баланса");
-    setBalance(b=>b-cost);
-    setFreeSpins(10);
-  }
-
-  return React.createElement("div",{className:"text-center gridbg"},
-    React.createElement("div",{className:"grid grid-cols-6 gap-2 mb-4"},
-      grid.flatMap((row,r)=>row.map((s,c)=>React.createElement(motion.div,{
-        key:r+"-"+c+"-"+s,
-        initial:{y:-50,opacity:0},
-        animate:{y:0,opacity:1},
-        transition:{duration:0.3},
-        className:"w-16 h-16 flex items-center justify-center text-3xl bg-white/20 rounded-xl"
-      },s)))
-    ),
-    React.createElement("div",{className:"mb-4 space-x-2"},
-      React.createElement("button",{onClick:spinGame,className:"px-6 py-2 bg-pink-500 text-white rounded-xl"}, "SPIN"),
-      React.createElement("button",{onClick:buyBonus,className:"px-6 py-2 bg-purple-500 text-white rounded-xl"}, "BUY BONUS 100x")
-    ),
-    React.createElement("div",{className:"text-white"},
-      "Balance: "+balance, React.createElement("br"),
-      "Free Spins: "+freeSpins
-    )
-  );
+  document.getElementById('info').textContent = `Balance: ${balance} | Free Spins: ${freeSpins}`;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+// Анимация выигрыша
+function animateWin(cells) {
+  cells.forEach(cell=>{
+    cell.classList.add('win');
+    setTimeout(()=>cell.classList.remove('win'),500);
+  });
+}
+
+// Spin
+function spinGame(){
+  // Генерируем сетку
+  grid = [];
+  let winCells = [];
+  for(let r=0;r<ROWS;r++){
+    const row = [];
+    for(let c=0;c<COLS;c++){
+      let sym = getRandomSymbol(freeSpins>0); // в бонусе шанс бонусных символов
+      row.push(sym);
+      if(sym===BONUS_SYMBOL) winCells.push({r,c});
+    }
+    grid.push(row);
+  }
+
+  // Случайный выигрыш
+  let win = Math.floor(Math.random()*bet*5);
+  balance = balance - bet + win;
+
+  // Используем Free Spins
+  if(freeSpins>0) freeSpins--;
+
+  createGrid();
+
+  // Анимация бонусных символов
+  winCells.forEach(pos=>{
+    const cellIndex = pos.r*COLS + pos.c;
+    const cellDiv = document.getElementById('grid').children[cellIndex];
+    animateWin([cellDiv]);
+  });
+
+  // Если 4+ бонуса — триггер Free Spins
+  if(winCells.length>=4){
+    freeSpins += 10;
+    alert("🎉 Bonus Triggered! 10 Free Spins!");
+  }
+}
+
+// Buy Bonus
+function buyBonus(){
+  const cost = bet*100;
+  if(balance<cost){ alert('Недостаточно баланса'); return; }
+  balance -= cost;
+  freeSpins += 10;
+  createGrid();
+  alert("🎁 Bought 10 Free Spins!");
+}
+
+// Инициализация сетки
+for(let r=0;r<ROWS;r++){
+  const row = [];
+  for(let c=0;c<COLS;c++){
+    row.push(getRandomSymbol());
+  }
+  grid.push(row);
+}
+createGrid();
 </script>
 </body>
 </html>
